@@ -1,0 +1,9 @@
+node_modules/
+dist/
+build/
+.env
+*.js.map
+cdk.out/
+__pycache__/
+*.pyc
+.vite/
