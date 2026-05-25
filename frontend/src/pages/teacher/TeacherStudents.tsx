@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Modal } from "@/components/ui/modal";
 import { Filter } from "lucide-react";
+import { formatDate } from "@/lib/utils";
 import api from "@/services/api";
 
 interface Student {
@@ -73,19 +74,35 @@ export default function TeacherStudents() {
   const openStudentDetail = async (student: Student) => {
     setSelectedStudent(student);
     setDetailLoading(true);
+
+    let allGrades: Grade[] = [];
+    let allAbsences: Absence[] = [];
+
     try {
-      const [gradesRes, absencesRes, guardiansRes] = await Promise.all([
-        api.get(`/grades?student_id=${student.student_id}`),
-        api.get(`/absences?student_id=${student.student_id}`),
-        api.get(`/guardians?student_id=${student.student_id}`),
-      ]);
-      // Filtrar apenas notas e faltas das minhas disciplinas
-      const allGrades: Grade[] = gradesRes.data.data || [];
-      const allAbsences: Absence[] = absencesRes.data.data || [];
+      const gradesRes = await api.get(`/grades?student_id=${student.student_id}`);
+      allGrades = gradesRes.data.data || [];
+    } catch { /* empty */ }
+
+    try {
+      const absencesRes = await api.get(`/absences?student_id=${student.student_id}`);
+      allAbsences = absencesRes.data.data || [];
+    } catch { /* empty */ }
+
+    try {
+      const guardiansRes = await api.get(`/guardians?student_id=${student.student_id}`);
+      setDetailGuardians(guardiansRes.data.data || []);
+    } catch { setDetailGuardians([]); }
+
+    // Filtrar apenas notas e faltas das minhas disciplinas (se disponível)
+    if (mySubjects.length > 0) {
       setDetailGrades(allGrades.filter((g) => mySubjects.includes(g.subject_id)));
       setDetailAbsences(allAbsences.filter((a) => mySubjects.includes(a.subject_id)));
-      setDetailGuardians(guardiansRes.data.data || []);
-    } catch { /* empty */ } finally { setDetailLoading(false); }
+    } else {
+      setDetailGrades(allGrades);
+      setDetailAbsences(allAbsences);
+    }
+
+    setDetailLoading(false);
   };
 
   const closeDetail = () => {
@@ -134,7 +151,7 @@ export default function TeacherStudents() {
               </div>
               <div className="rounded-lg border border-border p-3">
                 <p className="text-xs text-muted-foreground">Data de Nascimento</p>
-                <p className="font-medium">{selectedStudent.birth_date}</p>
+                <p className="font-medium">{formatDate(selectedStudent.birth_date)}</p>
               </div>
             </div>
 
@@ -193,7 +210,7 @@ export default function TeacherStudents() {
                               <TableRow key={subject}>
                                 <TableCell className="font-medium">{subject}</TableCell>
                                 {[1, 2, 3, 4].map((b) => {
-                                  const g = subjectGrades.find((gr) => gr.bimester === b);
+                                  const g = subjectGrades.find((gr) => Number(gr.bimester) === b);
                                   return (
                                     <TableCell key={b} className="text-center">
                                       {g ? (
@@ -247,7 +264,7 @@ export default function TeacherStudents() {
                     <TableCell className="font-medium">{s.name || "—"}</TableCell>
                     <TableCell className="font-mono text-xs">{s.ra || "—"}</TableCell>
                     <TableCell><Badge variant="secondary">{s.class_id}</Badge></TableCell>
-                    <TableCell>{s.birth_date}</TableCell>
+                    <TableCell>{formatDate(s.birth_date)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

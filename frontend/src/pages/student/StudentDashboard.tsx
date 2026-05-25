@@ -33,7 +33,7 @@ export default function StudentDashboard() {
     try {
       const [gradesRes, absencesRes] = await Promise.all([
         api.get("/grades", { params: { student_id: "current" } }),
-        api.get("/absences", { params: { student_id: "stu-001" } }),
+        api.get("/absences", { params: { student_id: "current" } }),
       ]);
       setGrades(gradesRes.data.data || []);
       setAbsences(absencesRes.data.data || []);
@@ -102,7 +102,7 @@ export default function StudentDashboard() {
                   <TableRow key={item.subject}>
                     <TableCell className="font-medium">{item.subject}</TableCell>
                     {[1, 2, 3, 4].map((b) => {
-                      const g = item.grades.find((gr) => gr.bimester === b);
+                      const g = item.grades.find((gr) => Number(gr.bimester) === b);
                       return (
                         <TableCell key={b} className="text-center">
                           {g ? (
@@ -167,7 +167,7 @@ export default function StudentDashboard() {
                     <TableRow key={item.subject}>
                       <TableCell className="font-medium">{item.subject}</TableCell>
                       {[1, 2, 3, 4].map((b) => {
-                        const a = item.absences.find((ab) => ab.bimester === b);
+                        const a = item.absences.find((ab) => Number(ab.bimester) === b);
                         const count = a?.absences ?? 0;
                         const atLimit = count >= ABSENCE_LIMIT_PER_BIMESTER;
                         const nearLimit = count >= ABSENCE_LIMIT_PER_BIMESTER - 1;

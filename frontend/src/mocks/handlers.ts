@@ -1,5 +1,5 @@
 import { http, HttpResponse, delay } from "msw";
-import { mockStudents, mockTeachers, mockGuardians, mockStudentGuardians, mockGrades, mockTeacherNotes, mockAbsences, mockTeacherAbsences, mockSubjects } from "./data";
+import { mockStudents, mockTeachers, mockGuardians, mockStudentGuardians, mockGrades, mockTeacherNotes, mockAbsences, mockTeacherAbsences, mockSubjects, mockClasses } from "./data";
 import { mockSchedule } from "./schedule-data";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
@@ -14,6 +14,7 @@ let teacherNotes = [...mockTeacherNotes];
 let absences = [...mockAbsences];
 let teacherAbsences = [...mockTeacherAbsences];
 let subjects = [...mockSubjects];
+let classes = [...mockClasses];
 
 export const handlers = [
   // === STUDENTS ===
@@ -43,6 +44,7 @@ export const handlers = [
       name: body.name || "Novo Aluno",
       cpf: body.cpf || "",
       ra: body.ra || "",
+      address: body.address || "",
     };
     students.push(newStudent);
 
@@ -68,6 +70,15 @@ export const handlers = [
     await delay(300);
     students = students.filter((s) => s.student_id !== params.id);
     return HttpResponse.json({ message: "Aluno removido com sucesso" });
+  }),
+
+  http.put(`${API_URL}/students/:id`, async ({ params, request }) => {
+    await delay(300);
+    const body = (await request.json()) as any;
+    students = students.map((s) =>
+      s.student_id === params.id ? { ...s, ...body } : s
+    );
+    return HttpResponse.json({ message: "Aluno atualizado com sucesso" });
   }),
 
   // === TEACHERS ===
@@ -112,6 +123,15 @@ export const handlers = [
     await delay(300);
     teachers = teachers.filter((t) => t.teacher_id !== params.id);
     return HttpResponse.json({ message: "Professor removido com sucesso" });
+  }),
+
+  http.put(`${API_URL}/teachers/:id`, async ({ params, request }) => {
+    await delay(300);
+    const body = (await request.json()) as any;
+    teachers = teachers.map((t) =>
+      t.teacher_id === params.id ? { ...t, ...body } : t
+    );
+    return HttpResponse.json({ message: "Professor atualizado com sucesso" });
   }),
 
   // === TEACHER ABSENCES ===
@@ -284,10 +304,9 @@ export const handlers = [
   // === CLASSES ===
   http.get(`${API_URL}/classes`, async () => {
     await delay(200);
-    const classIds = [...new Set(students.map((s) => s.class_id))].sort();
-    const result = classIds.map((id) => ({
-      class_id: id,
-      student_count: students.filter((s) => s.class_id === id).length,
+    const result = classes.map((cls) => ({
+      ...cls,
+      student_count: students.filter((s) => s.class_id === cls.class_id).length,
     }));
     return HttpResponse.json({ data: result });
   }),
@@ -297,9 +316,14 @@ export const handlers = [
     const body = (await request.json()) as any;
     const classId = body.class_id?.trim();
     if (!classId) return HttpResponse.json({ error: "class_id é obrigatório" }, { status: 400 });
-    const exists = students.some((s) => s.class_id === classId);
+    const exists = classes.some((c) => c.class_id === classId);
     if (exists) return HttpResponse.json({ error: "Turma já existe" }, { status: 400 });
-    // Criar turma vazia (sem alunos por enquanto, mas registrada no schedule)
+    const newClass = {
+      class_id: classId,
+      name: body.name || `Turma ${classId}`,
+      created_at: new Date().toISOString(),
+    };
+    classes.push(newClass);
     return HttpResponse.json({ data: { class_id: classId } }, { status: 201 });
   }),
 
@@ -313,10 +337,17 @@ export const handlers = [
       return HttpResponse.json({ error: "target_class é obrigatório para realocar alunos" }, { status: 400 });
     }
 
+    if (!classes.some((c) => c.class_id === targetClass)) {
+      return HttpResponse.json({ error: "Turma destino não encontrada" }, { status: 404 });
+    }
+
     // Realocar alunos da turma excluída para a turma destino
     students = students.map((s) =>
       s.class_id === classId ? { ...s, class_id: targetClass } : s
     );
+
+    // Remover a turma
+    classes = classes.filter((c) => c.class_id !== classId);
 
     return HttpResponse.json({ message: `Turma ${classId} excluída. Alunos realocados para ${targetClass}.` });
   }),
@@ -385,7 +416,7 @@ export const handlers = [
     });
 
     // Turmas disponíveis
-    const availableClasses = [...new Set(students.map((s) => s.class_id))].sort();
+    const availableClasses = classes.map((c) => c.class_id).sort();
 
     return HttpResponse.json({
       data: {

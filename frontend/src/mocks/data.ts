@@ -159,6 +159,12 @@ export const mockTeacherAbsences = [
   { teacher_id: "tea-007", date: "2024-03-19", reason: "Viagem profissional" },
 ];
 
+export const mockClasses = [
+  { class_id: "1A", name: "Turma 1A", created_at: "2024-01-15T10:00:00Z" },
+  { class_id: "2B", name: "Turma 2B", created_at: "2024-01-15T10:00:00Z" },
+  { class_id: "3A", name: "Turma 3A", created_at: "2024-01-15T10:00:00Z" },
+];
+
 export const mockSubjects = [
   "Matemática",
   "Português",

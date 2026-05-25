@@ -4,7 +4,7 @@ import { login as authLogin, logout as authLogout, getCurrentUser, type AuthUser
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<AuthUser>;
+  login: (email: string, password: string, newPassword?: string) => Promise<AuthUser>;
   logout: () => void;
 }
 
@@ -20,8 +20,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(false);
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const result = await authLogin(email, password);
+  const login = async (email: string, password: string, newPassword?: string) => {
+    const result = await authLogin(email, password, newPassword);
     setUser(result);
     return result;
   };

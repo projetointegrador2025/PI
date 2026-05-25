@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Filter } from "lucide-react";
+import { formatDateTime } from "@/lib/utils";
 import api from "@/services/api";
 
 interface Student {
@@ -71,7 +72,7 @@ export default function TeacherNotes() {
       </div>
 
       {message && (
-        <div className={`rounded-lg px-4 py-3 text-sm ${message.type === "success" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400" : "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400"}`}>
+        <div role="alert" className={`rounded-lg border px-4 py-3 text-sm font-medium ${message.type === "success" ? "border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" : "border-red-300 bg-red-100 text-red-800 dark:border-red-700 dark:bg-red-900/30 dark:text-red-300"}`}>
           {message.text}
           <button onClick={() => setMessage(null)} className="ml-2 font-bold">×</button>
         </div>
@@ -135,7 +136,7 @@ export default function TeacherNotes() {
               {notes.map((n) => (
                 <div key={n.note_id} className="rounded-lg border border-border p-4 transition-colors hover:bg-muted/50">
                   <p className="text-sm">{n.note}</p>
-                  <p className="mt-2 text-xs text-muted-foreground">{new Date(n.created_at).toLocaleString("pt-BR")}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">{formatDateTime(n.created_at)}</p>
                 </div>
               ))}
             </div>

@@ -11,6 +11,10 @@ export interface Tables {
   grades: dynamodb.Table;
   teacherNotes: dynamodb.Table;
   classSchedule: dynamodb.Table;
+  absences: dynamodb.Table;
+  subjects: dynamodb.Table;
+  teacherAbsences: dynamodb.Table;
+  classes: dynamodb.Table;
 }
 
 export class DatabaseStack extends cdk.Stack {
@@ -79,6 +83,36 @@ export class DatabaseStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    const absences = new dynamodb.Table(this, "AbsencesTable", {
+      tableName: "school-system-absences",
+      partitionKey: { name: "entity_id", type: dynamodb.AttributeType.STRING },
+      sortKey: { name: "sort_key", type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    const subjects = new dynamodb.Table(this, "SubjectsTable", {
+      tableName: "school-system-subjects",
+      partitionKey: { name: "subject_id", type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    const teacherAbsences = new dynamodb.Table(this, "TeacherAbsencesTable", {
+      tableName: "school-system-teacher-absences",
+      partitionKey: { name: "teacher_id", type: dynamodb.AttributeType.STRING },
+      sortKey: { name: "date", type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    const classes = new dynamodb.Table(this, "ClassesTable", {
+      tableName: "school-system-classes",
+      partitionKey: { name: "class_id", type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     this.tables = {
       users,
       students,
@@ -88,6 +122,10 @@ export class DatabaseStack extends cdk.Stack {
       grades,
       teacherNotes,
       classSchedule,
+      absences,
+      subjects,
+      teacherAbsences,
+      classes,
     };
   }
 }

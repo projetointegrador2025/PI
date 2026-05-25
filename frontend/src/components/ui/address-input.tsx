@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Input } from "./input";
 
 export interface Address {
@@ -23,7 +23,8 @@ export const emptyAddress: Address = {
 
 function maskCEP(value: string): string {
   const digits = value.replace(/\D/g, "").slice(0, 8);
-  return digits.replace(/(\d{5})(\d)/, "$1-$2");
+  if (digits.length <= 5) return digits;
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
 }
 
 interface AddressInputProps {
@@ -36,13 +37,7 @@ export function AddressInput({ value, onChange, error }: AddressInputProps) {
   const [cepLoading, setCepLoading] = useState(false);
   const [cepError, setCepError] = useState("");
 
-  const fetchCEP = async (cep: string) => {
-    const digits = cep.replace(/\D/g, "");
-    if (digits.length !== 8) {
-      setCepError("CEP deve ter 8 dígitos");
-      return;
-    }
-
+  const fetchCEP = useCallback(async (digits: string, currentValue: Address) => {
     setCepLoading(true);
     setCepError("");
 
@@ -52,12 +47,13 @@ export function AddressInput({ value, onChange, error }: AddressInputProps) {
 
       if (data.erro) {
         setCepError("CEP não encontrado");
-        onChange({ ...value, street: "", neighborhood: "", city: "", state: "" });
+        onChange({ ...currentValue, cep: maskCEP(digits), street: "", neighborhood: "", city: "", state: "" });
         return;
       }
 
       onChange({
-        ...value,
+        ...currentValue,
+        cep: maskCEP(digits),
         street: data.logradouro || "",
         neighborhood: data.bairro || "",
         city: data.localidade || "",
@@ -68,17 +64,29 @@ export function AddressInput({ value, onChange, error }: AddressInputProps) {
     } finally {
       setCepLoading(false);
     }
-  };
+  }, [onChange]);
 
   const handleCepChange = (rawValue: string) => {
-    const masked = maskCEP(rawValue);
-    onChange({ ...value, cep: masked });
+    const digits = rawValue.replace(/\D/g, "").slice(0, 8);
+    const masked = maskCEP(digits);
     setCepError("");
 
-    const digits = masked.replace(/\D/g, "");
-    if (digits.length === 8) {
-      fetchCEP(digits);
+    if (digits.length === 0) {
+      // CEP apagado: limpar todos os campos de endereço
+      onChange({ ...value, cep: "", street: "", neighborhood: "", city: "", state: "" });
+      return;
     }
+
+    if (digits.length < 8) {
+      // CEP incompleto: limpar campos preenchidos automaticamente
+      onChange({ ...value, cep: masked, street: "", neighborhood: "", city: "", state: "" });
+      return;
+    }
+
+    // CEP completo (8 dígitos): buscar endereço
+    const updatedValue = { ...value, cep: masked };
+    onChange(updatedValue);
+    fetchCEP(digits, updatedValue);
   };
 
   return (
@@ -89,20 +97,24 @@ export function AddressInput({ value, onChange, error }: AddressInputProps) {
           value={value.cep}
           onChange={(e) => handleCepChange(e.target.value)}
           placeholder="00000-000"
+          maxLength={9}
           error={cepError || error}
           disabled={cepLoading}
+          autoComplete="off"
         />
         <Input
           label="Rua"
           value={value.street}
           readOnly
           className="bg-muted/50"
+          autoComplete="off"
         />
         <Input
           label="Número *"
           value={value.number}
           onChange={(e) => onChange({ ...value, number: e.target.value })}
           placeholder="123"
+          autoComplete="off"
         />
       </div>
       <div className="grid gap-4 sm:grid-cols-4">
@@ -111,24 +123,28 @@ export function AddressInput({ value, onChange, error }: AddressInputProps) {
           value={value.neighborhood}
           readOnly
           className="bg-muted/50"
+          autoComplete="off"
         />
         <Input
           label="Cidade"
           value={value.city}
           readOnly
           className="bg-muted/50"
+          autoComplete="off"
         />
         <Input
           label="Estado"
           value={value.state}
           readOnly
           className="bg-muted/50"
+          autoComplete="off"
         />
         <Input
           label="Complemento"
           value={value.complement}
           onChange={(e) => onChange({ ...value, complement: e.target.value })}
           placeholder="Apto, Bloco..."
+          autoComplete="off"
         />
       </div>
       {cepLoading && <p className="text-xs text-muted-foreground">Buscando CEP...</p>}
@@ -137,7 +153,7 @@ export function AddressInput({ value, onChange, error }: AddressInputProps) {
 }
 
 export function formatAddress(addr: Address): string {
-  if (!addr.cep) return "";
+  if (!addr.street) return "";
   const parts = [
     addr.street,
     addr.number ? `nº ${addr.number}` : "",

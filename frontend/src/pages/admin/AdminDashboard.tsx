@@ -195,14 +195,14 @@ export default function AdminDashboard() {
                       </button>
                     </TableCell>
                   </TableRow>
-                  {expandedStudent === student.student_id && student.grades_by_subject.length > 0 && (
+                  {expandedStudent === student.student_id && (student.grades_by_subject || []).length > 0 && (
                     <TableRow key={`${student.student_id}-grades`}>
                       <TableCell colSpan={selectedClass === "all" ? 4 : 3}>
                         <div className="space-y-2 py-2">
-                          {student.grades_by_subject.map((g) => (
+                          {(student.grades_by_subject || []).map((g) => (
                             <div key={g.subject} className="flex flex-wrap items-center gap-2 rounded border border-border/50 bg-muted/30 px-3 py-2 text-sm">
                               <span className="font-medium min-w-[100px]">{g.subject}</span>
-                              {g.bimesters.map((b) => (
+                              {(g.bimesters || []).map((b) => (
                                 <span key={b.bimester} className={`rounded px-2 py-0.5 text-xs font-bold ${parseFloat(b.grade) >= 7 ? "bg-emerald-100 text-emerald-700" : parseFloat(b.grade) >= 5 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}>
                                   {b.bimester}º: {b.grade}
                                 </span>
@@ -213,6 +213,13 @@ export default function AdminDashboard() {
                             </div>
                           ))}
                         </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {expandedStudent === student.student_id && (student.grades_by_subject || []).length === 0 && (
+                    <TableRow key={`${student.student_id}-no-grades`}>
+                      <TableCell colSpan={selectedClass === "all" ? 4 : 3}>
+                        <p className="py-2 text-sm text-muted-foreground">Nenhuma nota cadastrada para este aluno.</p>
                       </TableCell>
                     </TableRow>
                   )}

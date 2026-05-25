@@ -2,7 +2,9 @@ import json
 import uuid
 import sys
 import os
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+BRT = timezone(timedelta(hours=-3))
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -12,17 +14,20 @@ from shared.auth import require_groups, get_user_id
 
 
 def handler(event, context):
-    method = event["httpMethod"]
+    try:
+        method = event["httpMethod"]
 
-    if method == "OPTIONS":
-        return success({"message": "ok"})
+        if method == "OPTIONS":
+            return success({"message": "ok"})
 
-    if method == "GET":
-        return _get_notes(event)
-    elif method == "POST":
-        return _create_note(event)
+        if method == "GET":
+            return _get_notes(event)
+        elif method == "POST":
+            return _create_note(event)
 
-    return error("Método não suportado", 405)
+        return error("Método não suportado", 405)
+    except Exception as e:
+        return error(f"Erro interno: {str(e)}", 500)
 
 
 def _get_notes(event):
@@ -65,7 +70,7 @@ def _create_note(event):
         "note_id": note_id,
         "teacher_id": teacher_id,
         "note": body["note"],
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(BRT).isoformat(),
     })
 
     return success({"data": {"note_id": note_id}}, 201)

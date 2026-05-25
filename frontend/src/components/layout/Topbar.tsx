@@ -12,7 +12,7 @@ export function Topbar({ onMenuToggle }: TopbarProps) {
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/80 px-6 backdrop-blur-md">
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur-md sm:px-6">
       <div className="flex items-center gap-3">
         <button
           onClick={onMenuToggle}

@@ -9,15 +9,18 @@ from shared.auth import require_groups
 
 
 def handler(event, context):
-    method = event["httpMethod"]
+    try:
+        method = event["httpMethod"]
 
-    if method == "OPTIONS":
-        return success({"message": "ok"})
+        if method == "OPTIONS":
+            return success({"message": "ok"})
 
-    if method == "GET":
-        return _get_schedule(event)
+        if method == "GET":
+            return _get_schedule(event)
 
-    return error("Método não suportado", 405)
+        return error("Método não suportado", 405)
+    except Exception as e:
+        return error(f"Erro interno: {str(e)}", 500)
 
 
 def _get_schedule(event):
@@ -29,6 +32,20 @@ def _get_schedule(event):
 
     if not class_id:
         return error("class_id é obrigatório")
+
+    # Resolver "current" para a turma do aluno logado
+    if class_id == "current":
+        from shared.auth import get_user_id
+        from boto3.dynamodb.conditions import Attr
+        user_id = get_user_id(event)
+        students_table = get_table("STUDENTS_TABLE")
+        response = students_table.scan(FilterExpression=Attr("user_id").eq(user_id))
+        items = response.get("Items", [])
+        if not items:
+            return success({"data": []})
+        class_id = items[0].get("class_id", "")
+        if not class_id:
+            return success({"data": []})
 
     table = get_table("CLASS_SCHEDULE_TABLE")
     from boto3.dynamodb.conditions import Key

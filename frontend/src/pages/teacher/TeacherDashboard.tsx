@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Users, ClipboardList, BookOpen, TrendingUp } from "lucide-react";
+import { Users, ClipboardList, BookOpen } from "lucide-react";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,14 +12,9 @@ interface Student {
   class_id: string;
 }
 
-interface Grade {
-  student_id: string;
-  subject_id: string;
-  grade: string;
-}
-
 export default function TeacherDashboard() {
   const [students, setStudents] = useState<Student[]>([]);
+  const [myClasses, setMyClasses] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedClass, setSelectedClass] = useState<string>("all");
 
@@ -27,13 +22,22 @@ export default function TeacherDashboard() {
 
   const loadData = async () => {
     try {
-      const res = await api.get("/students");
-      setStudents(res.data.data || []);
+      const [studentsRes, teacherRes] = await Promise.all([
+        api.get("/students"),
+        api.get("/teachers/me"),
+      ]);
+      setStudents(studentsRes.data.data || []);
+      const teacher = teacherRes.data.data;
+      setMyClasses(teacher?.classes || []);
     } catch { /* empty */ } finally { setLoading(false); }
   };
 
-  const classes = [...new Set(students.map((s) => s.class_id))].sort();
-  const filteredStudents = selectedClass === "all" ? students : students.filter((s) => s.class_id === selectedClass);
+  // Filtrar alunos apenas das turmas do professor
+  const myStudents = myClasses.length > 0
+    ? students.filter((s) => myClasses.includes(s.class_id))
+    : students;
+  const classes = [...new Set(myStudents.map((s) => s.class_id))].sort();
+  const filteredStudents = selectedClass === "all" ? myStudents : myStudents.filter((s) => s.class_id === selectedClass);
 
   if (loading) {
     return (
@@ -66,11 +70,10 @@ export default function TeacherDashboard() {
         </select>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard title="Meus Alunos" value={filteredStudents.length} icon={Users} />
         <StatCard title="Turmas" value={classes.length} icon={ClipboardList} />
-        <StatCard title="Anotações" value={35} icon={BookOpen} />
-        <StatCard title="Média Geral" value="7.4" icon={TrendingUp} />
+        <StatCard title="Disciplinas" value={myClasses.length > 0 ? myClasses.length : "—"} icon={BookOpen} />
       </div>
 
       <Card>

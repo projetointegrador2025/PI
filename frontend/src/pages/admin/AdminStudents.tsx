@@ -7,9 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Modal } from "@/components/ui/modal";
 import { AddressInput, emptyAddress, formatAddress, type Address } from "@/components/ui/address-input";
-import { Plus, Trash2, X, UserPlus, Users, Filter } from "lucide-react";
+import { Plus, Trash2, X, UserPlus, Users, Filter, Pencil } from "lucide-react";
 import { maskCPF, maskPhone, maskRA, validateCPF } from "@/lib/masks";
+import { formatDate } from "@/lib/utils";
 import api from "@/services/api";
+import Swal from "sweetalert2";
 
 interface Student {
   student_id: string;
@@ -66,6 +68,8 @@ export default function AdminStudents() {
   const [form, setForm] = useState({ name: "", email: "", class_id: "", birth_date: "", cpf: "", ra: "" });
   const [addressForm, setAddressForm] = useState<Address>({ ...emptyAddress });
   const [guardianForms, setGuardianForms] = useState<GuardianForm[]>([{ ...emptyGuardian }]);
+  const [availableClassesForForm, setAvailableClassesForForm] = useState<string[]>([]);
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
 
   // Guardian management for existing students
   const [managingGuardians, setManagingGuardians] = useState<string | null>(null);
@@ -83,7 +87,7 @@ export default function AdminStudents() {
 
   const availableClasses = [...new Set(students.map((s) => s.class_id))].sort();
 
-  useEffect(() => { loadStudents(); }, []);
+  useEffect(() => { loadStudents(); loadClasses(); }, []);
 
   const loadStudents = async () => {
     try {
@@ -92,25 +96,32 @@ export default function AdminStudents() {
     } catch { /* empty */ } finally { setLoading(false); }
   };
 
+  const loadClasses = async () => {
+    try {
+      const res = await api.get("/classes");
+      const classes = (res.data.data || []).map((c: { class_id: string }) => c.class_id);
+      setAvailableClassesForForm(classes);
+    } catch { /* empty */ }
+  };
+
   const filteredStudents = filterClass === "all" ? students : students.filter((s) => s.class_id === filterClass);
 
   const openStudentDetail = async (student: Student) => {
     setSelectedStudent(student);
     setDetailLoading(true);
     try {
-      const [guardiansRes, gradesRes, absencesRes] = await Promise.all([
-        api.get(`/guardians?student_id=${student.student_id}`),
-        api.get(`/grades?student_id=${student.student_id}`),
-        api.get(`/absences?student_id=${student.student_id}`),
-      ]);
+      const guardiansRes = await api.get(`/guardians?student_id=${student.student_id}`);
       setDetailGuardians(guardiansRes.data.data || []);
+    } catch { setDetailGuardians([]); }
+    try {
+      const gradesRes = await api.get(`/grades?student_id=${student.student_id}`);
       setDetailGrades(gradesRes.data.data || []);
+    } catch { setDetailGrades([]); }
+    try {
+      const absencesRes = await api.get(`/absences?student_id=${student.student_id}`);
       setDetailAbsences(absencesRes.data.data || []);
-    } catch {
-      // fallback
-    } finally {
-      setDetailLoading(false);
-    }
+    } catch { setDetailAbsences([]); }
+    setDetailLoading(false);
   };
 
   const closeStudentDetail = () => {
@@ -134,21 +145,33 @@ export default function AdminStudents() {
     if (!form.ra.trim()) newErrors.ra = "RA é obrigatório";
     else if (form.ra.replace(/\D/g, "").length < 5) newErrors.ra = "RA deve ter no mínimo 5 dígitos";
 
-    // Validar endereço
-    if (addressForm.cep) {
+    // Validar endereço (obrigatório apenas na criação, ou se preenchido na edição)
+    if (!editingStudent) {
+      if (!addressForm.cep || addressForm.cep.replace(/\D/g, "").length !== 8) {
+        newErrors.address = "CEP é obrigatório";
+      } else if (!addressForm.street) {
+        newErrors.address = "CEP não encontrado - verifique o CEP";
+      } else if (!addressForm.number.trim()) {
+        newErrors.address = "Número é obrigatório";
+      }
+    } else if (addressForm.cep) {
       const cepDigits = addressForm.cep.replace(/\D/g, "");
-      if (cepDigits.length !== 8) newErrors.address = "CEP inválido";
-      else if (!addressForm.street) newErrors.address = "CEP não encontrado - verifique o CEP";
+      if (cepDigits.length > 0 && cepDigits.length !== 8) newErrors.address = "CEP inválido";
+      else if (cepDigits.length === 8 && !addressForm.street) newErrors.address = "CEP não encontrado";
+      else if (cepDigits.length === 8 && !addressForm.number.trim()) newErrors.address = "Número é obrigatório";
     }
 
-    guardianForms.forEach((g, i) => {
-      if (!g.name.trim()) newErrors[`guardian_${i}_name`] = "Nome é obrigatório";
-      if (!g.cpf.trim()) newErrors[`guardian_${i}_cpf`] = "CPF é obrigatório";
-      else if (!validateCPF(g.cpf)) newErrors[`guardian_${i}_cpf`] = "CPF inválido";
-      if (!g.phone.trim()) newErrors[`guardian_${i}_phone`] = "Telefone é obrigatório";
-      if (!g.email.trim()) newErrors[`guardian_${i}_email`] = "Email é obrigatório";
-      if (!g.relationship_type.trim()) newErrors[`guardian_${i}_relationship`] = "Parentesco é obrigatório";
-    });
+    // Validar responsáveis apenas na criação
+    if (!editingStudent) {
+      guardianForms.forEach((g, i) => {
+        if (!g.name.trim()) newErrors[`guardian_${i}_name`] = "Nome é obrigatório";
+        if (!g.cpf.trim()) newErrors[`guardian_${i}_cpf`] = "CPF é obrigatório";
+        else if (!validateCPF(g.cpf)) newErrors[`guardian_${i}_cpf`] = "CPF inválido";
+        if (!g.phone.trim()) newErrors[`guardian_${i}_phone`] = "Telefone é obrigatório";
+        if (!g.email.trim()) newErrors[`guardian_${i}_email`] = "Email é obrigatório";
+        if (!g.relationship_type.trim()) newErrors[`guardian_${i}_relationship`] = "Parentesco é obrigatório";
+      });
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -158,21 +181,58 @@ export default function AdminStudents() {
     e.preventDefault();
     if (!validateForm()) return;
     try {
-      await api.post("/students", { ...form, address: formatAddress(addressForm), guardians: guardianForms });
-      setMessage({ text: "Aluno cadastrado com sucesso!", type: "success" });
+      if (editingStudent) {
+        const newAddress = formatAddress(addressForm);
+        const payload: Record<string, string> = { ...form };
+        if (newAddress) {
+          payload.address = newAddress;
+        }
+        await api.put(`/students/${editingStudent.student_id}`, payload);
+        setMessage({ text: "Aluno atualizado com sucesso!", type: "success" });
+      } else {
+        await api.post("/students", { ...form, address: formatAddress(addressForm), guardians: guardianForms });
+        setMessage({ text: "Aluno cadastrado com sucesso!", type: "success" });
+      }
       setShowForm(false);
+      setEditingStudent(null);
       setForm({ name: "", email: "", class_id: "", birth_date: "", cpf: "", ra: "" });
       setAddressForm({ ...emptyAddress });
       setGuardianForms([{ ...emptyGuardian }]);
       setErrors({});
       loadStudents();
     } catch (err: any) {
-      setMessage({ text: err.response?.data?.error || "Erro ao cadastrar", type: "error" });
+      setMessage({ text: err.response?.data?.error || "Erro ao salvar", type: "error" });
     }
   };
 
+  const startEditingStudent = (student: Student) => {
+    setEditingStudent(student);
+    setForm({
+      name: student.name || "",
+      email: "",
+      class_id: student.class_id,
+      birth_date: student.birth_date,
+      cpf: student.cpf || "",
+      ra: student.ra || "",
+    });
+    // Tentar parsear o endereço salvo de volta para o form
+    setAddressForm({ ...emptyAddress });
+    setGuardianForms([{ ...emptyGuardian }]);
+    setShowForm(true);
+    setManagingGuardians(null);
+  };
+
   const deleteStudent = async (id: string) => {
-    if (!confirm("Remover este aluno?")) return;
+    const result = await Swal.fire({
+      title: "Remover aluno?",
+      text: "Essa ação não pode ser desfeita.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#dc2626",
+      confirmButtonText: "Sim, remover",
+      cancelButtonText: "Cancelar",
+    });
+    if (!result.isConfirmed) return;
     try {
       await api.delete(`/students/${id}`);
       setMessage({ text: "Aluno removido com sucesso!", type: "success" });
@@ -216,7 +276,16 @@ export default function AdminStudents() {
       setMessage({ text: "O aluno deve ter no mínimo 1 responsável. Adicione outro antes de remover.", type: "error" });
       return;
     }
-    if (!confirm("Remover este responsável?")) return;
+    const result = await Swal.fire({
+      title: "Remover responsável?",
+      text: "Essa ação não pode ser desfeita.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#dc2626",
+      confirmButtonText: "Sim, remover",
+      cancelButtonText: "Cancelar",
+    });
+    if (!result.isConfirmed) return;
     try {
       await api.delete(`/guardians/${guardianId}?student_id=${managingGuardians}`);
       setMessage({ text: "Responsável removido!", type: "success" });
@@ -259,7 +328,7 @@ export default function AdminStudents() {
               ))}
             </select>
           </div>
-          <Button onClick={() => { setShowForm(!showForm); setManagingGuardians(null); }}>
+          <Button onClick={() => { setShowForm(!showForm); setManagingGuardians(null); setEditingStudent(null); setForm({ name: "", email: "", class_id: "", birth_date: "", cpf: "", ra: "" }); setAddressForm({ ...emptyAddress }); setGuardianForms([{ ...emptyGuardian }]); }}>
             {showForm ? <X className="mr-2 h-4 w-4" /> : <Plus className="mr-2 h-4 w-4" />}
             {showForm ? "Cancelar" : "Novo Aluno"}
           </Button>
@@ -267,125 +336,139 @@ export default function AdminStudents() {
       </div>
 
       {message && (
-        <div className={`rounded-lg px-4 py-3 text-sm ${message.type === "success" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400" : "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400"}`}>
+        <div role="alert" className={`rounded-lg border px-4 py-3 text-sm font-medium ${message.type === "success" ? "border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" : "border-red-300 bg-red-100 text-red-800 dark:border-red-700 dark:bg-red-900/30 dark:text-red-300"}`}>
           {message.text}
           <button onClick={() => setMessage(null)} className="ml-2 font-bold">×</button>
         </div>
       )}
 
-      {showForm && (
-        <Card>
-          <CardHeader><CardTitle>Cadastrar Aluno</CardTitle></CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Input label="Nome" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} error={errors.name} required />
-                <Input label="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-                <Input label="CPF" value={form.cpf} onChange={(e) => setForm({ ...form, cpf: maskCPF(e.target.value) })} placeholder="000.000.000-00" error={errors.cpf} required />
-                <Input label="RA (Registro do Aluno)" value={form.ra} onChange={(e) => setForm({ ...form, ra: maskRA(e.target.value) })} placeholder="0000000000" error={errors.ra} required />
-                <Input label="Turma" value={form.class_id} onChange={(e) => setForm({ ...form, class_id: e.target.value })} placeholder="Ex: 1A, 2B" error={errors.class_id} required />
-                <Input label="Data de Nascimento" type="date" value={form.birth_date} onChange={(e) => setForm({ ...form, birth_date: e.target.value })} error={errors.birth_date} required />
-              </div>
-
-              <h3 className="pt-2 text-sm font-semibold text-foreground">Endereço</h3>
-              <AddressInput value={addressForm} onChange={setAddressForm} error={errors.address} />
-              <div className="flex items-center justify-between pt-2">
-                <h3 className="text-sm font-semibold text-foreground">Responsáveis</h3>
-                <Button type="button" variant="outline" size="sm" onClick={addGuardianField}>
-                  <UserPlus className="mr-1 h-4 w-4" /> Adicionar Responsável
-                </Button>
-              </div>
-              {guardianForms.map((g, i) => (
-                <div key={i} className="space-y-3 rounded-lg border border-border p-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-muted-foreground">Responsável {i + 1}</span>
-                    {guardianForms.length > 1 && (
-                      <Button type="button" variant="ghost" size="sm" onClick={() => removeGuardianField(i)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    )}
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Input label="Nome" value={g.name} onChange={(e) => updateGuardianField(i, "name", e.target.value)} error={errors[`guardian_${i}_name`]} required />
-                    <Input label="CPF" value={g.cpf} onChange={(e) => updateGuardianField(i, "cpf", maskCPF(e.target.value))} placeholder="000.000.000-00" error={errors[`guardian_${i}_cpf`]} required />
-                    <Input label="Telefone" value={g.phone} onChange={(e) => updateGuardianField(i, "phone", maskPhone(e.target.value))} placeholder="(00) 00000-0000" error={errors[`guardian_${i}_phone`]} required />
-                    <Input label="Email" type="email" value={g.email} onChange={(e) => updateGuardianField(i, "email", e.target.value)} error={errors[`guardian_${i}_email`]} required />
-                    <Input label="Parentesco" value={g.relationship_type} onChange={(e) => updateGuardianField(i, "relationship_type", e.target.value)} placeholder="Ex: Mãe, Pai, Avó" error={errors[`guardian_${i}_relationship`]} required />
-                  </div>
-                </div>
-              ))}
-              <Button type="submit">Cadastrar</Button>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Guardian Management */}
-      {managingGuardians && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Responsáveis - {students.find((s) => s.student_id === managingGuardians)?.name}</CardTitle>
-              <Button variant="ghost" size="icon" onClick={() => setManagingGuardians(null)}><X className="h-4 w-4" /></Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {studentGuardians.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Carregando...</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>CPF</TableHead>
-                    <TableHead>Telefone</TableHead>
-                    <TableHead>Parentesco</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {studentGuardians.map((g) => (
-                    <TableRow key={g.guardian_id}>
-                      <TableCell className="font-medium">{g.name}</TableCell>
-                      <TableCell>{g.cpf}</TableCell>
-                      <TableCell>{g.phone}</TableCell>
-                      <TableCell>{g.relationship_type}</TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => removeGuardian(g.guardian_id)} disabled={studentGuardians.length <= 1} title={studentGuardians.length <= 1 ? "Não é possível remover o único responsável" : "Remover"}>
-                          <Trash2 className={`h-4 w-4 ${studentGuardians.length <= 1 ? "text-muted-foreground" : "text-destructive"}`} />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+      {/* Modal de Cadastro/Edição de Aluno */}
+      <Modal open={showForm} onClose={() => { setShowForm(false); setEditingStudent(null); setForm({ name: "", email: "", class_id: "", birth_date: "", cpf: "", ra: "" }); setAddressForm({ ...emptyAddress }); setGuardianForms([{ ...emptyGuardian }]); setErrors({}); }}>
+        <div className="space-y-4">
+          <h2 className="text-xl font-bold">{editingStudent ? "Editar Aluno" : "Cadastrar Aluno"}</h2>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input label="Nome" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} error={errors.name} required />
+              {!editingStudent && <Input label="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />}
+              <Input label="CPF" value={form.cpf} onChange={(e) => setForm({ ...form, cpf: maskCPF(e.target.value) })} placeholder="000.000.000-00" error={errors.cpf} required disabled={!!editingStudent} />
+              <Input label="RA (Registro do Aluno)" value={form.ra} onChange={(e) => setForm({ ...form, ra: maskRA(e.target.value) })} placeholder="0000000000" error={errors.ra} required disabled={!!editingStudent} />
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">Turma <span className="text-destructive">*</span></label>
+                <select
+                  value={form.class_id}
+                  onChange={(e) => setForm({ ...form, class_id: e.target.value })}
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  required
+                >
+                  <option value="">Selecione uma turma</option>
+                  {availableClassesForForm.map((cls) => (
+                    <option key={cls} value={cls}>{cls}</option>
                   ))}
-                </TableBody>
-              </Table>
-            )}
-            {studentGuardians.length <= 1 && (
-              <p className="text-xs text-amber-600">O aluno deve ter no mínimo 1 responsável. Adicione outro para poder remover.</p>
-            )}
-            {!showAddGuardian ? (
-              <Button variant="outline" size="sm" onClick={() => setShowAddGuardian(true)}>
-                <UserPlus className="mr-1 h-4 w-4" /> Adicionar Responsável
-              </Button>
-            ) : (
-              <div className="space-y-3 rounded-lg border border-border p-4">
-                <h4 className="text-sm font-medium">Novo Responsável</h4>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Input label="Nome" value={newGuardianForm.name} onChange={(e) => setNewGuardianForm({ ...newGuardianForm, name: e.target.value })} error={guardianErrors.new_guardian_name} required />
-                  <Input label="CPF" value={newGuardianForm.cpf} onChange={(e) => setNewGuardianForm({ ...newGuardianForm, cpf: maskCPF(e.target.value) })} placeholder="000.000.000-00" error={guardianErrors.new_guardian_cpf} required />
-                  <Input label="Telefone" value={newGuardianForm.phone} onChange={(e) => setNewGuardianForm({ ...newGuardianForm, phone: maskPhone(e.target.value) })} placeholder="(00) 00000-0000" error={guardianErrors.new_guardian_phone} required />
-                  <Input label="Email" type="email" value={newGuardianForm.email} onChange={(e) => setNewGuardianForm({ ...newGuardianForm, email: e.target.value })} error={guardianErrors.new_guardian_email} required />
-                  <Input label="Parentesco" value={newGuardianForm.relationship_type} onChange={(e) => setNewGuardianForm({ ...newGuardianForm, relationship_type: e.target.value })} placeholder="Ex: Mãe, Pai, Avó" error={guardianErrors.new_guardian_relationship} required />
-                </div>
-                <div className="flex gap-2">
-                  <Button type="button" size="sm" onClick={addGuardianToStudent}>Salvar</Button>
-                  <Button type="button" variant="outline" size="sm" onClick={() => { setShowAddGuardian(false); setGuardianErrors({}); }}>Cancelar</Button>
-                </div>
+                </select>
+                {errors.class_id && <p className="text-xs text-destructive">{errors.class_id}</p>}
               </div>
+              <Input label="Data de Nascimento" type="date" value={form.birth_date} onChange={(e) => setForm({ ...form, birth_date: e.target.value })} error={errors.birth_date} required />
+            </div>
+
+            <h3 className="pt-2 text-sm font-semibold text-foreground">Endereço</h3>
+            {editingStudent && editingStudent.address && (
+              <p className="text-sm text-muted-foreground">Endereço atual: <span className="font-medium text-foreground">{editingStudent.address}</span></p>
             )}
-          </CardContent>
-        </Card>
-      )}
+            <AddressInput value={addressForm} onChange={setAddressForm} error={errors.address} />
+
+            {!editingStudent && (
+              <>
+                <div className="flex items-center justify-between pt-2">
+                  <h3 className="text-sm font-semibold text-foreground">Responsáveis</h3>
+                  <Button type="button" variant="outline" size="sm" onClick={addGuardianField}>
+                    <UserPlus className="mr-1 h-4 w-4" /> Adicionar Responsável
+                  </Button>
+                </div>
+                {guardianForms.map((g, i) => (
+                  <div key={i} className="space-y-3 rounded-lg border border-border p-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-muted-foreground">Responsável {i + 1}</span>
+                      {guardianForms.length > 1 && (
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeGuardianField(i)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Input label="Nome" value={g.name} onChange={(e) => updateGuardianField(i, "name", e.target.value)} error={errors[`guardian_${i}_name`]} required />
+                      <Input label="CPF" value={g.cpf} onChange={(e) => updateGuardianField(i, "cpf", maskCPF(e.target.value))} placeholder="000.000.000-00" error={errors[`guardian_${i}_cpf`]} required />
+                      <Input label="Telefone" value={g.phone} onChange={(e) => updateGuardianField(i, "phone", maskPhone(e.target.value))} placeholder="(00) 00000-0000" error={errors[`guardian_${i}_phone`]} required />
+                      <Input label="Email" type="email" value={g.email} onChange={(e) => updateGuardianField(i, "email", e.target.value)} error={errors[`guardian_${i}_email`]} required />
+                      <Input label="Parentesco" value={g.relationship_type} onChange={(e) => updateGuardianField(i, "relationship_type", e.target.value)} placeholder="Ex: Mãe, Pai, Avó" error={errors[`guardian_${i}_relationship`]} required />
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+            <Button type="submit">{editingStudent ? "Salvar Alterações" : "Cadastrar"}</Button>
+          </form>
+        </div>
+      </Modal>
+
+      {/* Modal de Gerenciamento de Responsáveis */}
+      <Modal open={!!managingGuardians} onClose={() => setManagingGuardians(null)}>
+        <div className="space-y-4">
+          <h2 className="text-xl font-bold">Responsáveis - {students.find((s) => s.student_id === managingGuardians)?.name}</h2>
+          {studentGuardians.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Carregando...</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>CPF</TableHead>
+                  <TableHead>Telefone</TableHead>
+                  <TableHead>Parentesco</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {studentGuardians.map((g) => (
+                  <TableRow key={g.guardian_id}>
+                    <TableCell className="font-medium">{g.name}</TableCell>
+                    <TableCell>{g.cpf}</TableCell>
+                    <TableCell>{g.phone}</TableCell>
+                    <TableCell>{g.relationship_type}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" onClick={() => removeGuardian(g.guardian_id)} disabled={studentGuardians.length <= 1} title={studentGuardians.length <= 1 ? "Não é possível remover o único responsável" : "Remover"}>
+                        <Trash2 className={`h-4 w-4 ${studentGuardians.length <= 1 ? "text-muted-foreground" : "text-destructive"}`} />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          {studentGuardians.length <= 1 && (
+            <p className="text-xs text-amber-600">O aluno deve ter no mínimo 1 responsável. Adicione outro para poder remover.</p>
+          )}
+          {!showAddGuardian ? (
+            <Button variant="outline" size="sm" onClick={() => setShowAddGuardian(true)}>
+              <UserPlus className="mr-1 h-4 w-4" /> Adicionar Responsável
+            </Button>
+          ) : (
+            <div className="space-y-3 rounded-lg border border-border p-4">
+              <h4 className="text-sm font-medium">Novo Responsável</h4>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Input label="Nome" value={newGuardianForm.name} onChange={(e) => setNewGuardianForm({ ...newGuardianForm, name: e.target.value })} error={guardianErrors.new_guardian_name} required />
+                <Input label="CPF" value={newGuardianForm.cpf} onChange={(e) => setNewGuardianForm({ ...newGuardianForm, cpf: maskCPF(e.target.value) })} placeholder="000.000.000-00" error={guardianErrors.new_guardian_cpf} required />
+                <Input label="Telefone" value={newGuardianForm.phone} onChange={(e) => setNewGuardianForm({ ...newGuardianForm, phone: maskPhone(e.target.value) })} placeholder="(00) 00000-0000" error={guardianErrors.new_guardian_phone} required />
+                <Input label="Email" type="email" value={newGuardianForm.email} onChange={(e) => setNewGuardianForm({ ...newGuardianForm, email: e.target.value })} error={guardianErrors.new_guardian_email} required />
+                <Input label="Parentesco" value={newGuardianForm.relationship_type} onChange={(e) => setNewGuardianForm({ ...newGuardianForm, relationship_type: e.target.value })} placeholder="Ex: Mãe, Pai, Avó" error={guardianErrors.new_guardian_relationship} required />
+              </div>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" onClick={addGuardianToStudent}>Salvar</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => { setShowAddGuardian(false); setGuardianErrors({}); }}>Cancelar</Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
 
       {/* Student Detail Modal */}
       <Modal open={!!selectedStudent} onClose={closeStudentDetail}>
@@ -412,7 +495,7 @@ export default function AdminStudents() {
               </div>
               <div className="rounded-lg border border-border p-3">
                 <p className="text-xs text-muted-foreground">Data de Nascimento</p>
-                <p className="font-medium">{selectedStudent.birth_date}</p>
+                <p className="font-medium">{formatDate(selectedStudent.birth_date)}</p>
               </div>
               <div className="rounded-lg border border-border p-3 sm:col-span-2">
                 <p className="text-xs text-muted-foreground">Endereço</p>
@@ -479,7 +562,7 @@ export default function AdminStudents() {
                               <TableRow key={subject}>
                                 <TableCell className="font-medium">{subject}</TableCell>
                                 {[1, 2, 3, 4].map((b) => {
-                                  const g = subjectGrades.find((gr) => gr.bimester === b);
+                                  const g = subjectGrades.find((gr) => Number(gr.bimester) === b);
                                   return (
                                     <TableCell key={b} className="text-center">
                                       {g ? (
@@ -549,11 +632,14 @@ export default function AdminStudents() {
                     <TableCell className="font-mono text-xs">{s.ra || "—"}</TableCell>
                     <TableCell className="text-xs">{s.cpf || "—"}</TableCell>
                     <TableCell><Badge variant="secondary">{s.class_id}</Badge></TableCell>
-                    <TableCell>{s.birth_date}</TableCell>
+                    <TableCell>{formatDate(s.birth_date)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                         <Button variant="ghost" size="icon" onClick={() => loadGuardians(s.student_id)} title="Gerenciar responsáveis">
                           <Users className="h-4 w-4 text-primary" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => startEditingStudent(s)} title="Editar aluno">
+                          <Pencil className="h-4 w-4 text-muted-foreground" />
                         </Button>
                         <Button variant="ghost" size="icon" onClick={() => deleteStudent(s.student_id)} title="Remover aluno">
                           <Trash2 className="h-4 w-4 text-destructive" />

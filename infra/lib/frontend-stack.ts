@@ -17,10 +17,28 @@ export class FrontendStack extends cdk.Stack {
       autoDeleteObjects: true,
     });
 
+    // Cache policy para assets estáticos (JS, CSS, imagens) - cache longo
+    const assetsCachePolicy = new cloudfront.CachePolicy(this, "AssetsCachePolicy", {
+      cachePolicyName: "school-system-assets-cache",
+      defaultTtl: cdk.Duration.days(30),
+      maxTtl: cdk.Duration.days(365),
+      minTtl: cdk.Duration.days(1),
+      enableAcceptEncodingGzip: true,
+      enableAcceptEncodingBrotli: true,
+    });
+
     const distribution = new cloudfront.Distribution(this, "FrontendCDN", {
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(bucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+      },
+      additionalBehaviors: {
+        "assets/*": {
+          origin: origins.S3BucketOrigin.withOriginAccessControl(bucket),
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: assetsCachePolicy,
+        },
       },
       defaultRootObject: "index.html",
       errorResponses: [
@@ -28,11 +46,13 @@ export class FrontendStack extends cdk.Stack {
           httpStatus: 404,
           responseHttpStatus: 200,
           responsePagePath: "/index.html",
+          ttl: cdk.Duration.seconds(0),
         },
         {
           httpStatus: 403,
           responseHttpStatus: 200,
           responsePagePath: "/index.html",
+          ttl: cdk.Duration.seconds(0),
         },
       ],
     });

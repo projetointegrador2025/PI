@@ -11,24 +11,27 @@ from shared.auth import require_groups
 
 
 def handler(event, context):
-    method = event["httpMethod"]
-    path_params = event.get("pathParameters") or {}
+    try:
+        method = event["httpMethod"]
+        path_params = event.get("pathParameters") or {}
 
-    if method == "OPTIONS":
-        return success({"message": "ok"})
+        if method == "OPTIONS":
+            return success({"message": "ok"})
 
-    if method == "GET":
-        return _get_guardians(event)
-    elif method == "POST":
-        return _create_guardian(event)
-    elif method == "DELETE":
-        return _delete_guardian(event, path_params)
+        if method == "GET":
+            return _get_guardians(event)
+        elif method == "POST":
+            return _create_guardian(event)
+        elif method == "DELETE":
+            return _delete_guardian(event, path_params)
 
-    return error("Método não suportado", 405)
+        return error("Método não suportado", 405)
+    except Exception as e:
+        return error(f"Erro interno: {str(e)}", 500)
 
 
 def _get_guardians(event):
-    if not require_groups(event, ["Admin"]):
+    if not require_groups(event, ["Admin", "Teacher"]):
         return error("Acesso negado", 403)
 
     params = event.get("queryStringParameters") or {}

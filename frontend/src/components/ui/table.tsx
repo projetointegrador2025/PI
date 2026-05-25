@@ -39,6 +39,7 @@ const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<
   ({ className, ...props }, ref) => (
     <th
       ref={ref}
+      scope="col"
       className={cn("h-12 px-4 text-left align-middle font-medium text-muted-foreground", className)}
       {...props}
     />

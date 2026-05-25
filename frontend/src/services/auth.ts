@@ -7,7 +7,7 @@ export interface AuthUser {
 
 const isMockEnabled = import.meta.env.VITE_MOCK_ENABLED === "true";
 
-export async function login(email: string, password: string): Promise<AuthUser> {
+export async function login(email: string, password: string, newPassword?: string): Promise<AuthUser> {
   if (isMockEnabled) {
     const { mockLogin } = await import("@/mocks/auth-mock");
     return mockLogin(email, password);
@@ -41,6 +41,32 @@ export async function login(email: string, password: string): Promise<AuthUser> 
         resolve({ token: idToken, groups, name, email });
       },
       onFailure: (err) => reject(err),
+      newPasswordRequired: (userAttributes) => {
+        if (!newPassword) {
+          reject({ code: "NEW_PASSWORD_REQUIRED", message: "Nova senha obrigatória" });
+          return;
+        }
+        // Remove atributos que não podem ser enviados de volta
+        delete userAttributes.email_verified;
+        delete userAttributes.email;
+
+        user.completeNewPasswordChallenge(newPassword, userAttributes, {
+          onSuccess: (result) => {
+            const idToken = result.getIdToken().getJwtToken();
+            const payload = result.getIdToken().decodePayload();
+            const groups: string[] = payload["cognito:groups"] || [];
+            const name = payload.name || payload.email || email;
+
+            localStorage.setItem("idToken", idToken);
+            localStorage.setItem("userGroups", JSON.stringify(groups));
+            localStorage.setItem("userName", name);
+            localStorage.setItem("userEmail", email);
+
+            resolve({ token: idToken, groups, name, email });
+          },
+          onFailure: (err) => reject(err),
+        });
+      },
     });
   });
 }

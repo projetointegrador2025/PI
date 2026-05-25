@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import api from "@/services/api";
 
@@ -9,7 +10,10 @@ interface ScheduleItem {
   time: string;
   subject: string;
   teacher_id: string;
+  teacher_name?: string;
 }
+
+const DAYS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"];
 
 export default function StudentSchedule() {
   const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
@@ -23,6 +27,12 @@ export default function StudentSchedule() {
       setSchedule(res.data.data || []);
     } catch { /* empty */ } finally { setLoading(false); }
   };
+
+  const getScheduleForDayAndTime = (day: string, time: string) => {
+    return schedule.find((s) => s.day_of_week === day && s.time === time);
+  };
+
+  const times = [...new Set(schedule.map((s) => s.time))].sort();
 
   return (
     <div className="space-y-6">
@@ -39,24 +49,46 @@ export default function StudentSchedule() {
           ) : schedule.length === 0 ? (
             <p className="py-8 text-center text-muted-foreground">Nenhuma aula cadastrada para sua turma.</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Dia</TableHead>
-                  <TableHead>Horário</TableHead>
-                  <TableHead>Disciplina</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {schedule.map((s, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-medium">{s.day_of_week}</TableCell>
-                    <TableCell>{s.time}</TableCell>
-                    <TableCell>{s.subject}</TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-20">Horário</TableHead>
+                    {DAYS.map((day) => (
+                      <TableHead key={day} className="text-center">{day}</TableHead>
+                    ))}
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {times.map((time) => (
+                    <TableRow key={time}>
+                      <TableCell className="font-mono text-xs font-medium">{time}</TableCell>
+                      {DAYS.map((day) => {
+                        const item = getScheduleForDayAndTime(day, time);
+                        return (
+                          <TableCell key={day} className="text-center">
+                            {item ? (
+                              <div className="flex flex-col items-center gap-0.5">
+                                <Badge variant="secondary" className="text-xs">
+                                  {item.subject}
+                                </Badge>
+                                {item.teacher_name && (
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {item.teacher_name}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
