@@ -144,6 +144,8 @@ def _create_student(event):
         "birth_date": body["birth_date"],
         "cpf": body["cpf"],
         "ra": body["ra"],
+        "family_income": body.get("family_income", ""),
+        "people_in_house": body.get("people_in_house", 0),
     }
 
     # Endereço (opcional)
@@ -193,7 +195,7 @@ def _update_student(event, path_params):
         return error("Aluno não encontrado", 404)
 
     # Atualizar campos fornecidos
-    update_fields = ["name", "class_id", "birth_date", "cpf", "ra", "address"]
+    update_fields = ["name", "class_id", "birth_date", "cpf", "ra", "address", "family_income", "people_in_house"]
     for field in update_fields:
         if field in body:
             item[field] = body[field]

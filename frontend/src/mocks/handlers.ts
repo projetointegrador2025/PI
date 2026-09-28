@@ -45,6 +45,8 @@ export const handlers = [
       cpf: body.cpf || "",
       ra: body.ra || "",
       address: body.address || "",
+      family_income: body.family_income || "",
+      people_in_house: body.people_in_house || 0,
     };
     students.push(newStudent);
 

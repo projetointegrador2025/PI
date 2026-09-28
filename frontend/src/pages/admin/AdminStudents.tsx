@@ -18,6 +18,8 @@ interface Student {
   user_id: string;
   class_id: string;
   birth_date: string;
+  family_income: string;
+  people_in_house: number;
   name?: string;
   cpf?: string;
   ra?: string;
@@ -65,7 +67,7 @@ export default function AdminStudents() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Form state
-  const [form, setForm] = useState({ name: "", email: "", class_id: "", birth_date: "", cpf: "", ra: "" });
+  const [form, setForm] = useState({ name: "", email: "", class_id: "", birth_date: "", cpf: "", ra: "", family_income: "", people_in_house: 0 });
   const [addressForm, setAddressForm] = useState<Address>({ ...emptyAddress });
   const [guardianForms, setGuardianForms] = useState<GuardianForm[]>([{ ...emptyGuardian }]);
   const [availableClassesForForm, setAvailableClassesForForm] = useState<string[]>([]);
@@ -183,7 +185,7 @@ export default function AdminStudents() {
     try {
       if (editingStudent) {
         const newAddress = formatAddress(addressForm);
-        const payload: Record<string, string> = { ...form };
+        const payload: typeof form & { address?: string } = { ...form };
         if (newAddress) {
           payload.address = newAddress;
         }
@@ -195,7 +197,16 @@ export default function AdminStudents() {
       }
       setShowForm(false);
       setEditingStudent(null);
-      setForm({ name: "", email: "", class_id: "", birth_date: "", cpf: "", ra: "" });
+      setForm({
+        name: "",
+        email: "",
+        class_id: "",
+        birth_date: "",
+        cpf: "",
+        ra: "",
+        family_income: "",
+        people_in_house: 0,
+      });
       setAddressForm({ ...emptyAddress });
       setGuardianForms([{ ...emptyGuardian }]);
       setErrors({});
@@ -214,6 +225,8 @@ export default function AdminStudents() {
       birth_date: student.birth_date,
       cpf: student.cpf || "",
       ra: student.ra || "",
+      family_income: student.family_income || "",
+      people_in_house: student.people_in_house ?? 0,
     });
     // Tentar parsear o endereço salvo de volta para o form
     setAddressForm({ ...emptyAddress });
@@ -328,7 +341,7 @@ export default function AdminStudents() {
               ))}
             </select>
           </div>
-          <Button onClick={() => { setShowForm(!showForm); setManagingGuardians(null); setEditingStudent(null); setForm({ name: "", email: "", class_id: "", birth_date: "", cpf: "", ra: "" }); setAddressForm({ ...emptyAddress }); setGuardianForms([{ ...emptyGuardian }]); }}>
+          <Button onClick={() => { setShowForm(!showForm); setManagingGuardians(null); setEditingStudent(null); setForm({ name: "", email: "", class_id: "", birth_date: "", cpf: "", ra: "", family_income: "", people_in_house: 0 }); setAddressForm({ ...emptyAddress }); setGuardianForms([{ ...emptyGuardian }]); }}>
             {showForm ? <X className="mr-2 h-4 w-4" /> : <Plus className="mr-2 h-4 w-4" />}
             {showForm ? "Cancelar" : "Novo Aluno"}
           </Button>
@@ -343,7 +356,7 @@ export default function AdminStudents() {
       )}
 
       {/* Modal de Cadastro/Edição de Aluno */}
-      <Modal open={showForm} onClose={() => { setShowForm(false); setEditingStudent(null); setForm({ name: "", email: "", class_id: "", birth_date: "", cpf: "", ra: "" }); setAddressForm({ ...emptyAddress }); setGuardianForms([{ ...emptyGuardian }]); setErrors({}); }}>
+      <Modal open={showForm} onClose={() => { setShowForm(false); setEditingStudent(null); setForm({ name: "", email: "", class_id: "", birth_date: "", cpf: "", ra: "", family_income: "", people_in_house: 0 }); setAddressForm({ ...emptyAddress }); setGuardianForms([{ ...emptyGuardian }]); setErrors({}); }}>
         <div className="space-y-4">
           <h2 className="text-xl font-bold">{editingStudent ? "Editar Aluno" : "Cadastrar Aluno"}</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -375,6 +388,11 @@ export default function AdminStudents() {
               <p className="text-sm text-muted-foreground">Endereço atual: <span className="font-medium text-foreground">{editingStudent.address}</span></p>
             )}
             <AddressInput value={addressForm} onChange={setAddressForm} error={errors.address} />
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input label="Renda Familiar" value={form.family_income} onChange={(e) => setForm({ ...form, family_income: e.target.value })} placeholder="Ex: 2500.00" error={errors.family_income} required />
+              <Input label="Número de Pessoas na Casa" value={form.people_in_house} onChange={(e) => setForm({ ...form, people_in_house: parseInt(e.target.value) || 0 })} type="number" error={errors.people_in_house} required />
+            </div>
 
             {!editingStudent && (
               <>
