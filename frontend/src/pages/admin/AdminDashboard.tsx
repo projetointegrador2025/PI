@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { Users, GraduationCap, TrendingUp, Filter } from "lucide-react";
+import { Users, GraduationCap, TrendingUp, Filter, Download, Loader2 } from "lucide-react";
 import { StatCard } from "@/components/ui/stat-card";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import api from "@/services/api";
+import { generateStudentReport, type ReportStudent } from "@/lib/report";
 
 interface GradeBySubject {
   subject: string;
@@ -41,6 +43,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [selectedClass, setSelectedClass] = useState<string>("all");
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
 
   useEffect(() => {
     loadDashboard();
@@ -56,6 +59,24 @@ export default function AdminDashboard() {
       // fallback
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownloadReport = async () => {
+    if (!data) return;
+    setGeneratingPdf(true);
+    try {
+      // Busca os alunos (com renda) e cruza com as médias já calculadas no dashboard
+      const params = selectedClass !== "all" ? `?class_id=${selectedClass}` : "";
+      const res = await api.get(`/students${params}`);
+      const students: ReportStudent[] = res.data.data || [];
+      const averages = data.students.map((s) => ({ student_id: s.student_id, average: s.average }));
+      const classLabel = selectedClass === "all" ? "Todas as turmas" : `Turma ${selectedClass}`;
+      generateStudentReport(students, averages, { classLabel });
+    } catch {
+      // silencioso: se falhar, não gera o PDF
+    } finally {
+      setGeneratingPdf(false);
     }
   };
 
@@ -102,6 +123,10 @@ export default function AdminDashboard() {
               <option key={cls} value={cls}>Turma {cls}</option>
             ))}
           </select>
+          <Button onClick={handleDownloadReport} disabled={generatingPdf}>
+            {generatingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+            {generatingPdf ? "Gerando..." : "Baixar Relatório PDF"}
+          </Button>
         </div>
       </div>
 

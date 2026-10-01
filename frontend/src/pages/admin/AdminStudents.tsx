@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Modal } from "@/components/ui/modal";
 import { AddressInput, emptyAddress, formatAddress, type Address } from "@/components/ui/address-input";
 import { Plus, Trash2, X, UserPlus, Users, Filter, Pencil } from "lucide-react";
-import { maskCPF, maskPhone, maskRA, validateCPF } from "@/lib/masks";
+import { maskCPF, maskPhone, maskRA, validateCPF, maskCurrency, parseCurrency, formatCurrency } from "@/lib/masks";
 import { formatDate } from "@/lib/utils";
 import api from "@/services/api";
 import Swal from "sweetalert2";
@@ -147,6 +147,14 @@ export default function AdminStudents() {
     if (!form.ra.trim()) newErrors.ra = "RA é obrigatório";
     else if (form.ra.replace(/\D/g, "").length < 5) newErrors.ra = "RA deve ter no mínimo 5 dígitos";
 
+    // Validar renda familiar (numérica, > 0)
+    const income = parseCurrency(form.family_income);
+    if (!form.family_income.trim()) newErrors.family_income = "Renda familiar é obrigatória";
+    else if (isNaN(income) || income <= 0) newErrors.family_income = "Informe um valor de renda válido";
+
+    // Validar número de pessoas na casa (inteiro >= 1)
+    if (!form.people_in_house || form.people_in_house < 1) newErrors.people_in_house = "Informe ao menos 1 pessoa";
+
     // Validar endereço (obrigatório apenas na criação, ou se preenchido na edição)
     if (!editingStudent) {
       if (!addressForm.cep || addressForm.cep.replace(/\D/g, "").length !== 8) {
@@ -185,14 +193,14 @@ export default function AdminStudents() {
     try {
       if (editingStudent) {
         const newAddress = formatAddress(addressForm);
-        const payload: typeof form & { address?: string } = { ...form };
+        const payload: typeof form & { address?: string } = { ...form, family_income: parseCurrency(form.family_income).toFixed(2) };
         if (newAddress) {
           payload.address = newAddress;
         }
         await api.put(`/students/${editingStudent.student_id}`, payload);
         setMessage({ text: "Aluno atualizado com sucesso!", type: "success" });
       } else {
-        await api.post("/students", { ...form, address: formatAddress(addressForm), guardians: guardianForms });
+        await api.post("/students", { ...form, family_income: parseCurrency(form.family_income).toFixed(2), address: formatAddress(addressForm), guardians: guardianForms });
         setMessage({ text: "Aluno cadastrado com sucesso!", type: "success" });
       }
       setShowForm(false);
@@ -225,7 +233,7 @@ export default function AdminStudents() {
       birth_date: student.birth_date,
       cpf: student.cpf || "",
       ra: student.ra || "",
-      family_income: student.family_income || "",
+      family_income: student.family_income ? maskCurrency(Math.round(parseCurrency(student.family_income) * 100).toString()) : "",
       people_in_house: student.people_in_house ?? 0,
     });
     // Tentar parsear o endereço salvo de volta para o form
@@ -390,9 +398,21 @@ export default function AdminStudents() {
             <AddressInput value={addressForm} onChange={setAddressForm} error={errors.address} />
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Input label="Renda Familiar" value={form.family_income} onChange={(e) => setForm({ ...form, family_income: e.target.value })} placeholder="Ex: 2500.00" error={errors.family_income} required />
-              <Input label="Número de Pessoas na Casa" value={form.people_in_house} onChange={(e) => setForm({ ...form, people_in_house: parseInt(e.target.value) || 0 })} type="number" error={errors.people_in_house} required />
+              <Input label="Renda Familiar Mensal Bruta" value={form.family_income} onChange={(e) => setForm({ ...form, family_income: maskCurrency(e.target.value) })} placeholder="R$ 0,00" inputMode="numeric" error={errors.family_income} required />
+              <Input label="Número de Pessoas na Casa" value={form.people_in_house || ""} onChange={(e) => setForm({ ...form, people_in_house: parseInt(e.target.value) || 0 })} type="number" min={1} placeholder="Ex: 4" error={errors.people_in_house} required />
             </div>
+            {(() => {
+              const income = parseCurrency(form.family_income);
+              const people = form.people_in_house;
+              if (!isNaN(income) && income > 0 && people > 0) {
+                return (
+                  <p className="text-sm text-muted-foreground">
+                    Renda per capita: <span className="font-medium text-foreground">{formatCurrency(income / people)}</span>
+                  </p>
+                );
+              }
+              return null;
+            })()}
 
             {!editingStudent && (
               <>
@@ -518,6 +538,18 @@ export default function AdminStudents() {
               <div className="rounded-lg border border-border p-3 sm:col-span-2">
                 <p className="text-xs text-muted-foreground">Endereço</p>
                 <p className="font-medium">{selectedStudent.address || "—"}</p>
+              </div>
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs text-muted-foreground">Renda Familiar Mensal</p>
+                <p className="font-medium">{selectedStudent.family_income ? formatCurrency(parseCurrency(selectedStudent.family_income)) : "—"}</p>
+              </div>
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs text-muted-foreground">Renda per capita ({selectedStudent.people_in_house || 0} pessoa(s))</p>
+                <p className="font-medium">
+                  {selectedStudent.family_income && selectedStudent.people_in_house > 0
+                    ? formatCurrency(parseCurrency(selectedStudent.family_income) / selectedStudent.people_in_house)
+                    : "—"}
+                </p>
               </div>
             </div>
 

@@ -25,3 +25,23 @@ export function formatDateTime(dateStr: string | undefined | null): string {
   const date = new Date(dateStr);
   return date.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
+
+/**
+ * Média aritmética de uma lista de números. Retorna NaN se vazia.
+ */
+export function mean(values: number[]): number {
+  if (values.length === 0) return NaN;
+  return values.reduce((acc, v) => acc + v, 0) / values.length;
+}
+
+/**
+ * Mediana de uma lista de números. Retorna NaN se vazia.
+ */
+export function median(values: number[]): number {
+  if (values.length === 0) return NaN;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0
+    ? sorted[mid]
+    : (sorted[mid - 1] + sorted[mid]) / 2;
+}

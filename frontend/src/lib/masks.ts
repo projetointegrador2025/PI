@@ -44,3 +44,52 @@ export function validateCPF(cpf: string): boolean {
 
   return true;
 }
+
+/**
+ * Máscara de moeda em Real (BRL). Interpreta os dígitos como centavos.
+ * Ex: "250000" -> "R$ 2.500,00"
+ */
+export function maskCurrency(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 12); // até ~R$ 10 bilhões
+  if (!digits) return "";
+  const cents = parseInt(digits, 10);
+  const reais = cents / 100;
+  return reais.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+/**
+ * Converte um valor mascarado em BRL (ou string numérica livre) para número.
+ * Ex: "R$ 2.500,00" -> 2500, "2500.00" -> 2500. Retorna NaN se não houver dígitos.
+ */
+export function parseCurrency(value: string): number {
+  if (!value) return NaN;
+  const trimmed = value.trim();
+  // Caso venha formatado em pt-BR (com vírgula decimal)
+  if (/[.,]/.test(trimmed) && /,/.test(trimmed)) {
+    const digits = trimmed.replace(/\D/g, "");
+    if (!digits) return NaN;
+    return parseInt(digits, 10) / 100;
+  }
+  // Caso venha como string numérica simples ("2500" ou "2500.50")
+  const normalized = trimmed.replace(/[^\d.]/g, "");
+  const n = parseFloat(normalized);
+  return isNaN(n) ? NaN : n;
+}
+
+/**
+ * Formata um número como moeda BRL. Ex: 2500 -> "R$ 2.500,00"
+ */
+export function formatCurrency(value: number): string {
+  if (isNaN(value)) return "—";
+  return value.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
